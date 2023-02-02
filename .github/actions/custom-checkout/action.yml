@@ -1,0 +1,15 @@
+name: 'Checkout Target Branch'
+description: Git checkout
+
+inputs:
+  target-branch:
+    type: string
+    default: 'develop'
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch ${{ inputs.target-branch || 'develop' }} & ${{ github.ref_name }}
+      shell: bash
+      run: |
+        git fetch --depth=50 origin ${{ inputs.target-branch || 'develop' }}
