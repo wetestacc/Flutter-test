@@ -1,0 +1,118 @@
+name: Build & deploy Android
+
+on: 
+  workflow_call:
+    inputs:
+      runs_on:
+        required: true
+        type: string
+      deploy_app_distribution:
+        type: boolean
+        default: false
+      deploy_playstore:
+        type: boolean
+        default: false
+      run_tests:
+        type: boolean
+        default: false
+      upload_to_gcs:
+        type: boolean
+        default: false
+    secrets:
+      ENV_FILE_CONTENT_ANDROID:
+        required: true
+      GCS_CREDENTIALS_JSON:
+        required: false
+
+jobs:
+  run:
+    name: Android
+    runs-on: ${{ inputs.runs_on }} # e.g "ubuntu-latest", "macos-12", "[self-hosted, macOS]", "self-hosted"
+    timeout-minutes: ${{ 360 }} # e.g timeout for integration builds is the default 360 min
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 50
+
+    - uses: ./.github/actions/custom-checkout
+      with:
+        target-branch: ${{ github.event.pull_request.base.ref }}
+
+    - name: Set Up Flutter
+      if: ${{ inputs.runs_on != 'self-hosted' }}
+      uses: subosito/flutter-action@v2
+
+    - name: Setup Ruby
+      if: ${{ inputs.runs_on != 'self-hosted' }}
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.1.2'
+
+    - name: Install bundler
+      if: ${{ inputs.runs_on != 'self-hosted' }}
+      working-directory: 'android/'
+      run: |
+        gem install bundler:2.3.11
+        bundle config path vendor/bundle
+        bundle install --jobs 4 --retry 3
+
+    - name: fastlane beta
+      id: 'fastlane'
+      env:
+        ENV_FILE_CONTENT_ANDROID: '${{ secrets.ENV_FILE_CONTENT_ANDROID }}'
+      working-directory: 'android/'
+      shell: bash
+      run: |
+        echo "$ENV_FILE_CONTENT_ANDROID" >> ./fastlane/.env
+        if [[ '${{ inputs.runs_on }}' == 'self-hosted' ]]; then
+          fastlane beta \
+            deploy_app_distribution:${{ inputs.deploy_app_distribution }} \
+            deploy_playstore:${{ inputs.deploy_playstore }} \
+            build_number:${{ github.run_number }}
+        else
+          # we need to run the fastlane command using bundle for the plugins to work on ubuntu-latest
+          bundle exec fastlane install_plugins
+          bundle exec fastlane beta \
+            deploy_app_distribution:${{ inputs.deploy_app_distribution }} \
+            deploy_playstore:${{ inputs.deploy_playstore }} \
+            build_number:${{ github.run_number }}
+        fi
+        rm ./fastlane/.env
+
+        # read version code file and set its content as output
+        version_code=$(<fastlane/output/version_code.txt)
+        echo "version_code=$version_code" >> $GITHUB_OUTPUT
+
+    - name: fastlane testBuild flavor:beta
+      env:
+        ENV_FILE_CONTENT_ANDROID: '${{ secrets.ENV_FILE_CONTENT_ANDROID }}'
+      working-directory: 'android/'
+      shell: bash
+      run: |
+        echo "$ENV_FILE_CONTENT_ANDROID" >> ./fastlane/.env
+        if [[ '${{ inputs.runs_on }}' == 'self-hosted' ]]; then
+          fastlane testBuild \
+            flavor:beta \
+            run_tests:${{ inputs.run_tests }} \
+            is_self_hosted:${{ inputs.runs_on == 'self-hosted' }}
+        else 
+          bundle exec fastlane install_plugins
+          bundle exec fastlane testBuild \
+            flavor:beta \
+            run_tests:${{ inputs.run_tests }}
+        fi
+        rm ./fastlane/.env
+
+    - name: GCS auth
+      if: inputs.upload_to_gcs
+      uses: 'google-github-actions/auth@v1'
+      with:
+        credentials_json: '${{ secrets.GCS_CREDENTIALS_JSON }}'
+
+    - name: Upload artifacts to GCS
+      if: inputs.upload_to_gcs
+      uses: 'google-github-actions/upload-cloud-storage@v0'
+      with:
+        path: 'android/fastlane/output'
+        destination: 'toolstation-builder-mobile-app-builds/beta/${{ steps.fastlane.outputs.version_code }}/android'
+        parent: false

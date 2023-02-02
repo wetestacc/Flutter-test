@@ -1,0 +1,34 @@
+name: Testing and Analysis
+
+on: 
+  workflow_call:
+    inputs:
+      runs_on:
+        required: true
+        type: string
+
+jobs:
+  run:
+    runs-on: ${{ inputs.runs_on }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Flutter
+      if: ${{ inputs.runs_on != 'self-hosted' }}
+      uses: subosito/flutter-action@v2
+
+    - name: Install project dependencies
+      run: |
+        flutter pub get
+
+    - name: Check formatting
+      run: flutter format --set-exit-if-changed .
+
+    - name: Run static analysis
+      run: flutter analyze .
+
+    - name: Run tests
+      run: |
+        flutter test --machine test

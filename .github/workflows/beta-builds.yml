@@ -1,0 +1,63 @@
+name: Beta builds
+
+# This workflow is triggered on PR approvals or manually.
+on:
+  workflow_dispatch: # to manually run this workflow
+    inputs:
+      platform:
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+        default: 'all'
+      deploy_app_distribution:
+        type: boolean
+        default: true
+      deploy_testflight:
+        type: boolean
+        default: false
+      deploy_playstore:
+        type: boolean
+        default: false
+      self_hosted:
+        type: boolean
+        default: true
+  pull_request_review:
+    types: [submitted]
+    paths-ignore:
+      - 'tools/**' # not going to run this workflow if only tools are updated
+      - 'README.md' 
+      - 'test/**'
+      - 'test_driver/**'
+
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  beta-ios:
+    name: Beta-iOS
+    if: |
+      github.event.review.state == 'approved' ||  
+      (inputs.platform == 'all' || inputs.platform == 'ios')
+    uses: './.github/workflows/build-deploy-ios.yml'
+    with:
+      runs_on: ${{ (inputs.self_hosted || github.event.review.state == 'approved') && 'self-hosted' || 'macos-12' }}
+      deploy_app_distribution: ${{ inputs.deploy_app_distribution || github.event.review.state == 'approved' }}
+      deploy_testflight: ${{ inputs.deploy_testflight || false }}
+    secrets:
+      ENV_FILE_CONTENT_IOS: '${{ secrets.ENV_FILE_CONTENT_IOS }}'
+
+  beta-android:
+    name: Beta-Android
+    if: |
+      github.event.review.state == 'approved' ||
+      (inputs.platform == 'all' || inputs.platform == 'android')
+    uses: './.github/workflows/build-deploy-android.yml'
+    with:
+      runs_on: ${{ (inputs.self_hosted || github.event.review.state == 'approved') && 'self-hosted' || 'ubuntu-latest' }}
+      deploy_app_distribution: ${{ inputs.deploy_app_distribution || github.event.review.state == 'approved' }}
+      deploy_playstore: ${{ inputs.deploy_playstore || false }}
+    secrets:
+      ENV_FILE_CONTENT_ANDROID: '${{ secrets.ENV_FILE_CONTENT_ANDROID }}'
