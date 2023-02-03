@@ -1,0 +1,18 @@
+# For more information about this configuration visit
+# https://docs.fastlane.tools/actions/gym/#gymfile
+
+# In general, you can use the options available
+# fastlane gym --help
+
+export_options(
+  {
+    method: "app-store",
+    signingStyle: "manual",
+    manageAppVersionAndBuildNumber: false,
+    uploadSymbols: true,
+    silent: true,
+    provisioningProfiles: { 
+      "com.example.fluttertest" => "match AppStore com.example.fluttertest",
+    },
+  },
+)
