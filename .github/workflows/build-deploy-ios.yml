@@ -75,19 +75,6 @@ jobs:
         version_code=$(<fastlane/output/version_code.txt)
         echo "version_code=$version_code" >> $GITHUB_OUTPUT
 
-    - name: fastlane testBuild flavor:beta
-      env:
-        ENV_FILE_CONTENT_IOS: '${{ secrets.ENV_FILE_CONTENT_IOS }}'
-      working-directory: 'ios/'
-      shell: bash
-      run: |
-        echo "$ENV_FILE_CONTENT_IOS" >> ./fastlane/.env
-        fastlane testBuild \
-          flavor:beta \
-          run_tests:${{ inputs.run_tests }} \
-          is_self_hosted:${{ inputs.runs_on == 'self-hosted' }}
-        rm ./fastlane/.env
-
     - name: GCS auth
       if: inputs.upload_to_gcs
       uses: 'google-github-actions/auth@v1'
@@ -99,5 +86,5 @@ jobs:
       uses: 'google-github-actions/upload-cloud-storage@v0'
       with:
         path: 'ios/fastlane/output'
-        destination: 'toolstation-builder-mobile-app-builds/beta/${{ steps.fastlane.outputs.version_code }}/ios'
+        destination: 'mobile-app-builds/beta/${{ steps.fastlane.outputs.version_code }}/ios'
         parent: false
