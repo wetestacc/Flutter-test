@@ -83,26 +83,6 @@ jobs:
         version_code=$(<fastlane/output/version_code.txt)
         echo "version_code=$version_code" >> $GITHUB_OUTPUT
 
-    - name: fastlane testBuild flavor:beta
-      env:
-        ENV_FILE_CONTENT_ANDROID: '${{ secrets.ENV_FILE_CONTENT_ANDROID }}'
-      working-directory: 'android/'
-      shell: bash
-      run: |
-        echo "$ENV_FILE_CONTENT_ANDROID" >> ./fastlane/.env
-        if [[ '${{ inputs.runs_on }}' == 'self-hosted' ]]; then
-          fastlane testBuild \
-            flavor:beta \
-            run_tests:${{ inputs.run_tests }} \
-            is_self_hosted:${{ inputs.runs_on == 'self-hosted' }}
-        else 
-          bundle exec fastlane install_plugins
-          bundle exec fastlane testBuild \
-            flavor:beta \
-            run_tests:${{ inputs.run_tests }}
-        fi
-        rm ./fastlane/.env
-
     - name: GCS auth
       if: inputs.upload_to_gcs
       uses: 'google-github-actions/auth@v1'
@@ -114,5 +94,5 @@ jobs:
       uses: 'google-github-actions/upload-cloud-storage@v0'
       with:
         path: 'android/fastlane/output'
-        destination: 'toolstation-builder-mobile-app-builds/beta/${{ steps.fastlane.outputs.version_code }}/android'
+        destination: 'mobile-app-builds/beta/${{ steps.fastlane.outputs.version_code }}/android'
         parent: false
