@@ -1,0 +1,128 @@
+default_platform(:android)
+
+# Types and Paths
+TYPE_APK = "apk"
+TYPE_bundle = "appbundle"
+BUILD_BUNDLE_OUTPUT_FOLDER = "../build/app/outputs/bundle/"
+BUILD_APK_OUTPUT_FOLDER = "../build/app/outputs/flutter-apk/"
+BUILD_MAPPING_OUTPUT_FOLDER = "../build/app/outputs/mapping/"
+BUILD_OUTPUT_FOLDER = "./fastlane/output/"
+
+# Firebase
+FIREBASE_CLI_TOKEN = ENV["FIREBASE_CLI_TOKEN"] || ""
+APP_ID = ENV["APP_ID"] || ""
+
+# Signing
+KEY_PROPERTIES_CONTENT = ENV["KEY_PROPERTIES_CONTENT"]
+UPLOAD_KEY_BASE64 = ENV["UPLOAD_KEY_BASE64"]
+
+# Play store related
+ANDROID_SERVICE_ACCOUNT_JSON = ENV["ANDROID_SERVICE_ACCOUNT_JSON"]
+
+
+
+platform :android do
+  desc "Build and Deploy"
+  lane :beta do |options|
+    build_number = options[:build_number]
+    build_type = options[:build_type]
+    deploy_firebase_app_distribution = options[:deploy_firebase_app_distribution]
+    deploy_playstore = options[:deploy_playstore]
+    
+    # setup_signing
+
+    build(build_number: build_number, build_type: build_type)
+
+    if deploy_firebase_app_distribution
+      release_notes = generate_changelog
+      deploy_firebase_app_distribution(release_notes: release_notes)
+    end
+
+    if deploy_playstore
+      deploy_playstore(build_type: build_type)
+    end
+
+    # cleanup
+  end
+
+  private_lane :setup_signing do |options|
+    Dir.chdir("../") do
+      File.write("upload_key.jks", Base64.decode64(UPLOAD_KEY_BASE64))
+      File.write("key.properties", KEY_PROPERTIES_CONTENT)
+    end
+  end
+
+  private_lane :build do |options|
+    build_type = options[:build_type]
+    build_number = options[:build_number]
+    should_set_build_number = !build_number.nil?
+
+    sh(
+      "flutter", "build", 
+      build_type == TYPE_APK ? "apk" : "appbundle", 
+      "-t", "./lib/main.dart",
+      should_set_build_number ? "--build-number #{build_number}" : "",
+    )
+
+    prepare_output_files(
+      build_type: 
+    )
+  end
+
+  private_lane :prepare_output_files do |options|
+    build_type = options[:build_type]
+
+    mapping_txt_path = "#{BUILD_MAPPING_OUTPUT_FOLDER}release/mapping.txt"
+    artifact_path = build_type == TYPE_APK ? "#{BUILD_APK_OUTPUT_FOLDER}app-release.apk" : "#{BUILD_BUNDLE_OUTPUT_FOLDER}app-release.aab"
+    
+    copy_artifacts(
+      target_path: BUILD_OUTPUT_FOLDER,
+      artifacts: [artifact_path, mapping_txt_path || ""]
+    )
+  end
+
+  private_lane :generate_changelog do |options|
+    release_notes = changelog_from_git_commits(
+      pretty: "Message: %s%nNotes: %b%nCommit: %h%nAuthor: %cn%n%n",# Optional, lets you provide a custom format to apply to each commit when generating the changelog text
+      merge_commit_filtering: "exclude_merges",
+      between: ["origin/develop", "HEAD"] # this only gets commits between develop branch and head commit
+    )
+    Dir.chdir("../") do
+      File.write("#{BUILD_OUTPUT_FOLDER}changelog.txt", release_notes)
+    end
+    release_notes
+  end
+
+  private_lane :deploy_firebase_app_distribution do
+    release_notes = options[:release_notes]
+    
+    firebase_app_distribution(
+      groups: "alpha",
+      release_notes: release_notes,
+      apk_path: BUILD_PATH,
+      firebase_cli_token: FIREBASE_CLI_TOKEN,
+      app: APP_ID,
+    )
+  end
+
+  private_lane :deploy_playstore do |options|
+    build_type = options[:build_type]
+    mapping_txt_path = "#{BUILD_MAPPING_OUTPUT_FOLDER}Release/mapping.txt"
+    artifact_path = build_type == TYPE_APK ? "#{BUILD_APK_OUTPUT_FOLDER}app-release.apk" : "#{BUILD_BUNDLE_OUTPUT_FOLDER}app-release.aab"
+
+    supply(
+      track: "internal",
+      package_name: "com.example.fluttertest",
+      json_key_data: ANDROID_SERVICE_ACCOUNT_JSON,
+      aab: artifact_path,
+      mapping: mapping_txt_path,
+    )
+  end
+
+  private_lane :cleanup do |options|
+    Dir.chdir("../") do
+      sh("rm upload_key.*")
+      sh("rm key.*")
+    end
+  end
+end

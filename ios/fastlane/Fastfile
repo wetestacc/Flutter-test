@@ -1,0 +1,214 @@
+default_platform(:ios)
+
+# Types and Paths
+TYPE_APPSTORE = "appstore"
+TYPE_ADHOC = "adhoc"
+TYPE_PROFILE = "profile"
+BUILD_OUTPUT_FOLDER = "./fastlane/output/"
+
+# Firebase
+FIREBASE_CLI_PATH = "/usr/local/bin/firebase"
+FIREBASE_CLI_TOKEN = ENV["FIREBASE_CLI_TOKEN"] || ""
+APP_ID = ENV["APP_ID"] || ""
+
+# Git
+GIT_AUTHORIZATION = ENV["GIT_AUTHORIZATION"]
+
+# Keychain
+TEMP_KEYCHAIN_USER = ENV["TEMP_KEYCHAIN_USER"]
+TEMP_KEYCHAIN_PASSWORD = ENV["TEMP_KEYCHAIN_PASSWORD"]
+
+# Apple
+APPLE_ISSUER_ID = ENV["APPLE_ISSUER_ID"]
+APPLE_KEY_ID = ENV["APPLE_KEY_ID"]
+APPLE_KEY_CONTENT = ENV["APPLE_KEY_CONTENT"]
+
+platform :ios do
+  desc "Build and Deploy"
+  lane :beta do |options|
+    deploy_testflight = options[:deploy_testflight]
+    deploy_firebase_app_distribution = options[:deploy_firebase_app_distribution]
+
+    if deploy_testflight && deploy_firebase_app_distribution
+      UI.user_error!("Only either 'deploy_testflight' or 'deploy_firebase_app_distribution' can be used at a time")
+      return
+    end
+
+    build_number = options[:build_number]
+    is_self_hosted = options[:is_self_hosted]
+    code_sign_identity = options[:code_sign_identity]
+    
+    type = deploy_testflight ? TYPE_APPSTORE : TYPE_ADHOC
+    
+    if code_sign_identity != "Local"
+      setup_signing(
+        type: type,
+        is_self_hosted: is_self_hosted,
+        code_sign_identity: code_sign_identity
+      )
+    end
+    
+    output_ipa_name = "#{type}.ipa"
+
+    build(
+      build_number: build_number,
+      type: type,
+      output_ipa_name: output_ipa_name,
+      is_self_hosted: is_self_hosted
+    )
+
+    if code_sign_identity != "Local"
+      release_notes = generate_changelog
+    end
+
+    if code_sign_identity != "Local" && deploy_firebase_app_distribution
+      deploy_firebase_app_distribution(
+        output_ipa_name: output_ipa_name,
+        release_notes: release_notes
+      )
+    end
+
+    if code_sign_identity != "Local" && deploy_testflight && type == TYPE_APPSTORE
+      deploy_testflight(
+        output_ipa_name: output_ipa_name,
+      )
+      
+      upload_dsym_to_firebase(
+        type: type
+      )
+    end
+    
+    cleanup
+  end
+
+  private_lane :setup_signing do |options|
+    desc "Configures signing using match"
+    type = options[:type]
+    is_self_hosted = options[:is_self_hosted]
+    code_sign_identity = options[:code_sign_identity]
+
+    if !is_self_hosted
+      setup_ci if ENV['CI']
+    end
+
+    api_key = app_store_connect_api_key(
+      key_id: APPLE_KEY_ID,
+      issuer_id: APPLE_ISSUER_ID,
+      key_content: APPLE_KEY_CONTENT,
+      duration: 1200,
+      in_house: false,
+    )
+    
+    match(
+      type: type,
+      app_identifier: ["com.example.fluttertest"],
+      git_basic_authorization: Base64.strict_encode64(GIT_AUTHORIZATION),
+      readonly: true,
+      api_key: api_key,
+      shallow_clone: true,
+      generate_apple_certs: false,
+    )
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      profile_name: "match #{type == TYPE_APPSTORE ? "AppStore" : "AdHoc"} com.example.fluttertest",
+      code_sign_identity: code_sign_identity,
+    )
+  end
+
+  private_lane :build do |options|
+    build_number = options[:build_number]
+    type = options[:type]
+    output_ipa_name = options[:output_ipa_name]
+    is_self_hosted = options[:is_self_hosted]
+
+    if !is_self_hosted && ENV['CI']
+      # for self-hosted runners `flutter build` must be run outside fastlane
+      Dir.chdir("../../") do
+        # code here runs in the root of the repo becasue user code is always running from ios/fastlane
+        sh("flutter", "build", "ios", "-t", "./lib/main.dart", "--config-only", type == TYPE_PROFILE ? "--profile" : "")
+      end
+    end
+
+    if !build_number.nil? && type == TYPE_ADHOC
+      increment_build_number(
+        build_number: build_number,
+      )
+    end
+
+    gym(
+      configuration: "#{type == TYPE_PROFILE ? "Profile" : "Release"}",  
+      scheme: "Runner",
+      output_name: output_ipa_name,
+      output_directory: BUILD_OUTPUT_FOLDER,
+      skip_codesigning: code_sign_identity == Local ? true : false,
+      skip_package_ipa: code_sign_identity == Local ? true : false,
+    )
+  end
+
+  private_lane :generate_changelog do |options|
+    release_notes = changelog_from_git_commits(
+      pretty: "Message: %s%nNotes: %b%nCommit: %h%nAuthor: %cn%n%n",# Optional, lets you provide a custom format to apply to each commit when generating the changelog text
+      merge_commit_filtering: "exclude_merges",
+      between: ["origin/develop", "HEAD"] # this only gets commits between develop branch and head commit
+    )
+    Dir.chdir("../") do
+      File.write("#{BUILD_OUTPUT_FOLDER}changelog.txt", release_notes)
+    end
+    release_notes
+  end
+
+  private_lane :deploy_firebase_app_distribution do |options|
+    output_ipa_name = options[:output_ipa_name]
+    release_notes = options[:release_notes]
+
+    firebase_app_distribution(
+      groups: "alpha",
+      release_notes: release_notes,
+      ipa_path: "#{BUILD_OUTPUT_FOLDER}#{output_ipa_name}",
+      firebase_cli_token: FIREBASE_CLI_TOKEN,
+      googleservice_info_plist_path: "GoogleService-Info.plist",
+    )
+  end
+
+  private_lane :deploy_testflight do |options|
+    output_ipa_name = options[:output_ipa_name]
+
+    api_key = app_store_connect_api_key(
+      key_id: APPLE_KEY_ID,
+      issuer_id: APPLE_ISSUER_ID,
+      key_content: APPLE_KEY_CONTENT,
+      duration: 1200,
+      in_house: false,
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: 'com.example.fluttertest',
+      skip_waiting_for_build_processing: true,
+      ipa:"#{BUILD_OUTPUT_FOLDER}#{output_ipa_name}",
+    )
+  end
+
+  private_lane :upload_dsym_to_firebase do |options|
+    type = options[:type]
+
+    upload_symbols_to_crashlytics(
+      gsp_path: "config/GoogleService-Info.plist",
+      dsym_path: "#{BUILD_OUTPUT_FOLDER}#{type}.app.dSYM.zip"
+    )
+  end
+
+  private_lane :cleanup do |options|
+    desc "Resets xcode project signing"
+
+    if !ENV['CI']
+      # resetting project configuration on local builds
+      update_code_signing_settings(
+        use_automatic_signing: true,
+        profile_name: "",
+        code_sign_identity: "Apple Development",
+      )
+    end
+  end
+end
