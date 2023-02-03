@@ -33,14 +33,17 @@ platform :android do
 
     build(build_number: build_number, build_type: build_type)
 
+    release_notes = generate_changelog
+
     if deploy_firebase_app_distribution
-      release_notes = generate_changelog
       deploy_firebase_app_distribution(release_notes: release_notes)
     end
 
     if deploy_playstore
       deploy_playstore(build_type: build_type)
     end
+    
+    read_flutter_version_code
 
     # cleanup
   end
@@ -117,6 +120,15 @@ platform :android do
       aab: artifact_path,
       mapping: mapping_txt_path,
     )
+  end
+
+  private_lane :read_flutter_version_code do |options|
+    # reading flutter version code and creating a file with the code to be used
+    # outside of fastlane/ruby
+    flutter_version_code = flutter_version()["version_code"]
+    Dir.chdir("../") do
+      File.write("#{BUILD_OUTPUT_FOLDER}version_code.txt", flutter_version_code)
+    end
   end
 
   private_lane :cleanup do |options|
