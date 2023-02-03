@@ -78,6 +78,8 @@ platform :ios do
       )
     end
     
+    read_flutter_version_code
+
     cleanup
   end
 
@@ -197,6 +199,15 @@ platform :ios do
       gsp_path: "config/GoogleService-Info.plist",
       dsym_path: "#{BUILD_OUTPUT_FOLDER}#{type}.app.dSYM.zip"
     )
+  end
+
+  private_lane :read_flutter_version_code do |options|
+    # reading flutter version code and creating a file with the code to be used
+    # outside of fastlane/ruby
+    flutter_version_code = flutter_version()["version_code"]
+    Dir.chdir("../") do
+      File.write("#{BUILD_OUTPUT_FOLDER}version_code.txt", flutter_version_code)
+    end
   end
 
   private_lane :cleanup do |options|
