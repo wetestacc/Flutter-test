@@ -10,6 +10,7 @@ on:
 jobs:
   run:
     runs-on: ${{ inputs.runs_on }}
+    environment: Development
 
     steps:
     - name: Checkout repository
