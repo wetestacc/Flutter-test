@@ -13,3 +13,9 @@ jobs:
     uses: './.github/workflows/testing-and-analysis.yml'
     with:
       runs_on: 'ubuntu-latest'
+
+  race-condition:
+    name: Race Condition
+    uses: './.github/workflows/testing-and-analysis.yml'
+    with:
+      runs_on: 'ubuntu-latest'
