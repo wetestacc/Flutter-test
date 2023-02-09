@@ -73,6 +73,7 @@ jobs:
         run: |
           echo "$ENV_FILE_CONTENT_IOS" >> ./fastlane/.env
           fastlane beta \
+            code_sign_identity:"Local" \
             is_self_hosted:${{ inputs.runs_on == 'self-hosted' }} \
             deploy_app_distribution:${{ inputs.deploy_app_distribution }} \
             deploy_testflight:${{ inputs.deploy_testflight }} \
