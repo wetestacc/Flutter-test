@@ -124,14 +124,6 @@ platform :ios do
     output_ipa_name = options[:output_ipa_name]
     is_self_hosted = options[:is_self_hosted]
 
-    if !is_self_hosted && ENV['CI']
-      # for self-hosted runners `flutter build` must be run outside fastlane
-      Dir.chdir("../../") do
-        # code here runs in the root of the repo becasue user code is always running from ios/fastlane
-        sh("flutter", "build", "ios", "-t", "./lib/main.dart", "--config-only", type == TYPE_PROFILE ? "--profile" : "")
-      end
-    end
-
     if !build_number.nil? && type == TYPE_ADHOC
       increment_build_number(
         build_number: build_number,
