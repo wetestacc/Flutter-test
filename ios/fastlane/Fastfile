@@ -54,7 +54,8 @@ platform :ios do
       build_number: build_number,
       type: type,
       output_ipa_name: output_ipa_name,
-      is_self_hosted: is_self_hosted
+      is_self_hosted: is_self_hosted,
+      code_sign_identity: code_sign_identity
     )
 
     if code_sign_identity != "Local"
@@ -123,6 +124,7 @@ platform :ios do
     type = options[:type]
     output_ipa_name = options[:output_ipa_name]
     is_self_hosted = options[:is_self_hosted]
+    code_sign_identity = options[:code_sign_identity]
 
     if !build_number.nil? && type == TYPE_ADHOC
       increment_build_number(
