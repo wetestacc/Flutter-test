@@ -3,7 +3,6 @@ default_platform(:ios)
 # Types and Paths
 TYPE_APPSTORE = "appstore"
 TYPE_ADHOC = "adhoc"
-TYPE_PROFILE = "profile"
 BUILD_OUTPUT_FOLDER = "./fastlane/output/"
 
 # Firebase
@@ -26,6 +25,7 @@ APPLE_KEY_CONTENT = ENV["APPLE_KEY_CONTENT"]
 platform :ios do
   desc "Build and Deploy"
   lane :beta do |options|
+    no_codesign = options[:no_codesign]
     deploy_testflight = options[:deploy_testflight]
     deploy_firebase_app_distribution = options[:deploy_firebase_app_distribution]
 
@@ -36,42 +36,40 @@ platform :ios do
 
     build_number = options[:build_number]
     is_self_hosted = options[:is_self_hosted]
-    code_sign_identity = options[:code_sign_identity]
     
     type = deploy_testflight ? TYPE_APPSTORE : TYPE_ADHOC
     
-    if code_sign_identity != "Local"
+    if !no_codesign
       setup_signing(
         type: type,
         is_self_hosted: is_self_hosted,
-        code_sign_identity: code_sign_identity
       )
     end
     
-    output_ipa_name = "#{type}.ipa"
+    output_file_name = no_codesign ? "#{type}." : "#{type}.ipa"
 
     build(
       build_number: build_number,
       type: type,
-      output_ipa_name: output_ipa_name,
+      output_file_name: output_file_name,
       is_self_hosted: is_self_hosted,
-      code_sign_identity: code_sign_identity
+      no_codesign: no_codesign
     )
 
-    if code_sign_identity != "Local"
+    if !no_codesign
       release_notes = generate_changelog
     end
 
-    if code_sign_identity != "Local" && deploy_firebase_app_distribution
+    if !no_codesign && deploy_firebase_app_distribution
       deploy_firebase_app_distribution(
-        output_ipa_name: output_ipa_name,
+        output_file_name: output_file_name,
         release_notes: release_notes
       )
     end
 
-    if code_sign_identity != "Local" && deploy_testflight && type == TYPE_APPSTORE
+    if !no_codesign && deploy_testflight && type == TYPE_APPSTORE
       deploy_testflight(
-        output_ipa_name: output_ipa_name,
+        output_file_name: output_file_name,
       )
       
       upload_dsym_to_firebase(
@@ -88,7 +86,6 @@ platform :ios do
     desc "Configures signing using match"
     type = options[:type]
     is_self_hosted = options[:is_self_hosted]
-    code_sign_identity = options[:code_sign_identity]
 
     if !is_self_hosted
       setup_ci if ENV['CI']
@@ -111,20 +108,20 @@ platform :ios do
       shallow_clone: true,
       generate_apple_certs: false,
     )
-
+    
     update_code_signing_settings(
       use_automatic_signing: false,
       profile_name: "match #{type == TYPE_APPSTORE ? "AppStore" : "AdHoc"} com.example.fluttertest",
-      code_sign_identity: code_sign_identity,
+      code_sign_identity: "Apple Distribution"
     )
   end
 
   private_lane :build do |options|
     build_number = options[:build_number]
     type = options[:type]
-    output_ipa_name = options[:output_ipa_name]
+    output_file_name = options[:output_file_name]
     is_self_hosted = options[:is_self_hosted]
-    code_sign_identity = options[:code_sign_identity]
+    no_codesign = options[:no_codesign]
 
     if !build_number.nil? && type == TYPE_ADHOC
       increment_build_number(
@@ -133,12 +130,12 @@ platform :ios do
     end
 
     gym(
-      configuration: "#{type == TYPE_PROFILE ? "Profile" : "Release"}",  
+      configuration: "#{no_codesign ? "Debug" : type == TYPE_ADHOC ? "Profile" : "Release"}",  
       scheme: "Runner",
-      output_name: output_ipa_name,
+      output_name: output_file_name,
       output_directory: BUILD_OUTPUT_FOLDER,
-      skip_codesigning: code_sign_identity == "Local" ? true : false,
-      skip_package_ipa: code_sign_identity == "Local" ? true : false,
+      skip_codesigning: no_codesign,
+      skip_package_ipa: no_codesign,
     )
   end
 
@@ -155,20 +152,20 @@ platform :ios do
   end
 
   private_lane :deploy_firebase_app_distribution do |options|
-    output_ipa_name = options[:output_ipa_name]
+    output_file_name = options[:output_file_name]
     release_notes = options[:release_notes]
 
     firebase_app_distribution(
       groups: "alpha",
       release_notes: release_notes,
-      ipa_path: "#{BUILD_OUTPUT_FOLDER}#{output_ipa_name}",
+      ipa_path: "#{BUILD_OUTPUT_FOLDER}#{output_file_name}",
       firebase_cli_token: FIREBASE_CLI_TOKEN,
       googleservice_info_plist_path: "GoogleService-Info.plist",
     )
   end
 
   private_lane :deploy_testflight do |options|
-    output_ipa_name = options[:output_ipa_name]
+    output_file_name = options[:output_file_name]
 
     api_key = app_store_connect_api_key(
       key_id: APPLE_KEY_ID,
@@ -182,7 +179,7 @@ platform :ios do
       api_key: api_key,
       app_identifier: 'com.example.fluttertest',
       skip_waiting_for_build_processing: true,
-      ipa:"#{BUILD_OUTPUT_FOLDER}#{output_ipa_name}",
+      ipa:"#{BUILD_OUTPUT_FOLDER}#{output_file_name}",
     )
   end
 

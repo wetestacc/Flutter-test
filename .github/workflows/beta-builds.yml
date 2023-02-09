@@ -12,10 +12,14 @@ on:
           - ios
           - all
         default: "all"
+      no_codesign:
+        description: Do not sign code
+        type: boolean
+        default: true
       deploy_app_distribution:
         description: Deploy on app distribution
         type: boolean
-        default: true
+        default: false
       deploy_testflight:
         description: Deploy on testflight
         type: boolean
@@ -27,7 +31,7 @@ on:
       self_hosted:
         description: Run jobs on self-hosted machine
         type: boolean
-        default: true
+        default: false
   pull_request_review:
     types: [submitted]
     paths-ignore:
@@ -49,6 +53,7 @@ jobs:
     uses: "./.github/workflows/build-deploy-ios.yml"
     with:
       runs_on: ${{ (inputs.self_hosted || github.event.review.state == 'approved') && 'self-hosted' || 'macos-12' }}
+      no_codesign: ${{ inputs.no_codesign || false }}
       deploy_app_distribution: ${{ inputs.deploy_app_distribution || github.event.review.state == 'approved' }}
       deploy_testflight: ${{ inputs.deploy_testflight || false }}
     secrets:
