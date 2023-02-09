@@ -1,6 +1,6 @@
 name: Build & deploy iOS
 
-on: 
+on:
   workflow_call:
     inputs:
       runs_on:
@@ -25,74 +25,74 @@ on:
         required: false
 
 env:
-  XCODE_VERSION: '14.1'
+  XCODE_VERSION: "14.1"
 
 jobs:
   run:
     name: iOS
     runs-on: ${{ (inputs.runs_on == 'self-hosted' && fromJSON('[ "self-hosted", "macOS" ]')) || inputs.runs_on }} # e.g ["macos-12"], "[self-hosted, macOS]"
-    timeout-minutes: ${{ 360 }} # e.g timeout for integration builds is the default 360 min
+    timeout-minutes: 360 # e.g timeout for integration builds is the default 360 min
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 50
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 50
 
-    - uses: ./.github/actions/custom-checkout
-      with:
-        target-branch: ${{ github.event.pull_request.base.ref }}
-  
-    - name: Set up Xcode ${{ env.XCODE_VERSION }}
-      if: ${{ inputs.runs_on != 'self-hosted' }}
-      uses: maxim-lobanov/setup-xcode@v1
-      with:
-        xcode-version: ${{ env.XCODE_VERSION }}
+      - uses: ./.github/actions/custom-checkout
+        with:
+          target-branch: ${{ github.event.pull_request.base.ref }}
 
-    - name: Cache Flutter dependencies
-      uses: actions/cache@v3.2.4
-      with:
-        path: /opt/hostedtoolcache/flutter
-        key: ${{ runner.OS }}-flutter-install-cache-3.3.10
-    
-    - name: Set up Flutter
-      if: ${{ inputs.runs_on != 'self-hosted' }}
-      uses: subosito/flutter-action@v2
-      with:
+      - name: Set up Xcode ${{ env.XCODE_VERSION }}
+        if: ${{ inputs.runs_on != 'self-hosted' }}
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v3.2.4
+        with:
+          path: /opt/hostedtoolcache/flutter
+          key: ${{ runner.OS }}-flutter-install-cache-3.3.10
+
+      - name: Set up Flutter
+        if: ${{ inputs.runs_on != 'self-hosted' }}
+        uses: subosito/flutter-action@v2
+        with:
           flutter-version: 3.3.10
-          
-    - name: Self-hosted flutter build pre fastlane
-      if: ${{ inputs.runs_on == 'self-hosted' }}
-      run: |
-        flutter build ios --config-only
 
-    - name: fastlane beta
-      id: 'fastlane'
-      env:
-        ENV_FILE_CONTENT_IOS: '${{ secrets.ENV_FILE_CONTENT_IOS }}'
-      working-directory: 'ios/'
-      shell: bash
-      run: |
-        echo "$ENV_FILE_CONTENT_IOS" >> ./fastlane/.env
-        fastlane beta \
-          is_self_hosted:${{ inputs.runs_on == 'self-hosted' }} \
-          deploy_app_distribution:${{ inputs.deploy_app_distribution }} \
-          deploy_testflight:${{ inputs.deploy_testflight }} \
-          build_number:${{ github.run_number }}
-        rm ./fastlane/.env
+      - name: Self-hosted flutter build pre fastlane
+        if: ${{ inputs.runs_on == 'self-hosted' }}
+        run: |
+          flutter build ios --config-only
 
-        # read version code file and set its content as output
-        version_code=$(<fastlane/output/version_code.txt)
-        echo "version_code=$version_code" >> $GITHUB_OUTPUT
+      - name: fastlane beta
+        id: "fastlane"
+        env:
+          ENV_FILE_CONTENT_IOS: "${{ secrets.ENV_FILE_CONTENT_IOS }}"
+        working-directory: "ios/"
+        shell: bash
+        run: |
+          echo "$ENV_FILE_CONTENT_IOS" >> ./fastlane/.env
+          fastlane beta \
+            is_self_hosted:${{ inputs.runs_on == 'self-hosted' }} \
+            deploy_app_distribution:${{ inputs.deploy_app_distribution }} \
+            deploy_testflight:${{ inputs.deploy_testflight }} \
+            build_number:${{ github.run_number }}
+          rm ./fastlane/.env
 
-    - name: GCS auth
-      if: inputs.upload_to_gcs
-      uses: 'google-github-actions/auth@v1'
-      with:
-        credentials_json: '${{ secrets.GCS_CREDENTIALS_JSON }}'
+          # read version code file and set its content as output
+          version_code=$(<fastlane/output/version_code.txt)
+          echo "version_code=$version_code" >> $GITHUB_OUTPUT
 
-    - name: Upload artifacts to GCS
-      if: inputs.upload_to_gcs
-      uses: 'google-github-actions/upload-cloud-storage@v0'
-      with:
-        path: 'ios/fastlane/output'
-        destination: 'mobile-app-builds/beta/${{ steps.fastlane.outputs.version_code }}/ios'
-        parent: false
+      - name: GCS auth
+        if: inputs.upload_to_gcs
+        uses: "google-github-actions/auth@v1"
+        with:
+          credentials_json: "${{ secrets.GCS_CREDENTIALS_JSON }}"
+
+      - name: Upload artifacts to GCS
+        if: inputs.upload_to_gcs
+        uses: "google-github-actions/upload-cloud-storage@v0"
+        with:
+          path: "ios/fastlane/output"
+          destination: "mobile-app-builds/beta/${{ steps.fastlane.outputs.version_code }}/ios"
+          parent: false

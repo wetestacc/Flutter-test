@@ -3,19 +3,19 @@ on:
   workflow_dispatch:
   pull_request:
 
-concurrency: 
+concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   testing-and-analysis:
     name: Testing & analysis
-    uses: './.github/workflows/testing-and-analysis.yml'
+    uses: "./.github/workflows/testing-and-analysis.yml"
     with:
-      runs_on: 'ubuntu-latest'
+      runs_on: "ubuntu-latest"
 
   race-condition:
     name: Race Condition
-    uses: './.github/workflows/testing-and-analysis.yml'
+    uses: "./.github/workflows/testing-and-analysis.yml"
     with:
-      runs_on: 'ubuntu-latest'
+      runs_on: "ubuntu-latest"

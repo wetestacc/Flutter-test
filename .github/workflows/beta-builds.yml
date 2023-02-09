@@ -5,33 +5,38 @@ on:
   workflow_dispatch: # to manually run this workflow
     inputs:
       platform:
+        description: Choose platforms for which you want to build
         type: choice
         options:
           - android
           - ios
           - all
-        default: 'all'
+        default: "all"
       deploy_app_distribution:
+        description: Do you want to deploy on app distribution
         type: boolean
         default: true
       deploy_testflight:
+        description: Do you want to deploy on testflight
         type: boolean
         default: false
       deploy_playstore:
+        description: Do you want to deploy on playstore
         type: boolean
         default: false
       self_hosted:
+        description: Do you want to run jobs on self-hosted machine
         type: boolean
         default: true
   pull_request_review:
     types: [submitted]
     paths-ignore:
-      - 'tools/**' # not going to run this workflow if only tools are updated
-      - 'README.md' 
-      - 'test/**'
-      - 'test_driver/**'
+      - "tools/**" # not going to run this workflow if only tools are updated
+      - "README.md"
+      - "test/**"
+      - "test_driver/**"
 
-concurrency: 
+concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
@@ -41,23 +46,23 @@ jobs:
     if: |
       github.event.review.state == 'approved' ||  
       (inputs.platform == 'all' || inputs.platform == 'ios')
-    uses: './.github/workflows/build-deploy-ios.yml'
+    uses: "./.github/workflows/build-deploy-ios.yml"
     with:
       runs_on: ${{ (inputs.self_hosted || github.event.review.state == 'approved') && 'self-hosted' || 'macos-12' }}
       deploy_app_distribution: ${{ inputs.deploy_app_distribution || github.event.review.state == 'approved' }}
       deploy_testflight: ${{ inputs.deploy_testflight || false }}
     secrets:
-      ENV_FILE_CONTENT_IOS: '${{ secrets.ENV_FILE_CONTENT_IOS }}'
+      ENV_FILE_CONTENT_IOS: "${{ secrets.ENV_FILE_CONTENT_IOS }}"
 
   beta-android:
     name: Beta-Android
     if: |
       github.event.review.state == 'approved' ||
       (inputs.platform == 'all' || inputs.platform == 'android')
-    uses: './.github/workflows/build-deploy-android.yml'
+    uses: "./.github/workflows/build-deploy-android.yml"
     with:
       runs_on: ${{ (inputs.self_hosted || github.event.review.state == 'approved') && 'self-hosted' || 'ubuntu-latest' }}
       deploy_app_distribution: ${{ inputs.deploy_app_distribution || github.event.review.state == 'approved' }}
       deploy_playstore: ${{ inputs.deploy_playstore || false }}
     secrets:
-      ENV_FILE_CONTENT_ANDROID: '${{ secrets.ENV_FILE_CONTENT_ANDROID }}'
+      ENV_FILE_CONTENT_ANDROID: "${{ secrets.ENV_FILE_CONTENT_ANDROID }}"

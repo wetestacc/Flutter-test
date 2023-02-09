@@ -143,8 +143,8 @@ platform :ios do
       scheme: "Runner",
       output_name: output_ipa_name,
       output_directory: BUILD_OUTPUT_FOLDER,
-      skip_codesigning: code_sign_identity == Local ? true : false,
-      skip_package_ipa: code_sign_identity == Local ? true : false,
+      skip_codesigning: code_sign_identity == "Local" ? true : false,
+      skip_package_ipa: code_sign_identity == "Local" ? true : false,
     )
   end
 
