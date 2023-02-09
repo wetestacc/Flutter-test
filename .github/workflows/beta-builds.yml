@@ -13,19 +13,19 @@ on:
           - all
         default: "all"
       deploy_app_distribution:
-        description: Do you want to deploy on app distribution
+        description: Deploy on app distribution
         type: boolean
         default: true
       deploy_testflight:
-        description: Do you want to deploy on testflight
+        description: Deploy on testflight
         type: boolean
         default: false
       deploy_playstore:
-        description: Do you want to deploy on playstore
+        description: Deploy on playstore
         type: boolean
         default: false
       self_hosted:
-        description: Do you want to run jobs on self-hosted machine
+        description: Run jobs on self-hosted machine
         type: boolean
         default: true
   pull_request_review:
