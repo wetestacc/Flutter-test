@@ -1,6 +1,6 @@
 name: Testing and Analysis
 
-on: 
+on:
   workflow_call:
     inputs:
       runs_on:
@@ -12,31 +12,31 @@ jobs:
     runs-on: ${{ inputs.runs_on }}
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Cache Flutter dependencies
-      uses: actions/cache@v3.2.4
-      with:
-        path: /opt/hostedtoolcache/flutter
-        key: ${{ runner.OS }}-flutter-install-cache-3.3.10
-    
-    - name: Set up Flutter
-      if: ${{ inputs.runs_on != 'self-hosted' }}
-      uses: subosito/flutter-action@v2
-      with:
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v3.2.4
+        with:
+          path: /opt/hostedtoolcache/flutter
+          key: ${{ runner.OS }}-flutter-install-cache-3.3.10
+
+      - name: Set up Flutter
+        if: ${{ inputs.runs_on != 'self-hosted' }}
+        uses: subosito/flutter-action@v2
+        with:
           flutter-version: 3.3.10
 
-    - name: Install project dependencies
-      run: |
-        flutter pub get
+      - name: Install project dependencies
+        run: |
+          flutter pub get
 
-    - name: Check formatting
-      run: flutter format --set-exit-if-changed .
+      - name: Check formatting
+        run: flutter format --set-exit-if-changed .
 
-    - name: Run static analysis
-      run: flutter analyze .
+      - name: Run static analysis
+        run: flutter analyze .
 
-    - name: Run tests
-      run: |
-        flutter test --machine test
+      - name: Run tests
+        run: |
+          flutter test --machine test
