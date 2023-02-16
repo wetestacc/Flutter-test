@@ -19,7 +19,7 @@ jobs:
         uses: actions/cache@v3.2.4
         with:
           path: /opt/hostedtoolcache/flutter
-          key: ${{ runner.OS }}-flutter-install-cache-3.3.10
+          key: ${{ runner.OS }}-flutter-install-cache
 
       - name: Set up Flutter
         if: ${{ inputs.runs_on != 'self-hosted' }}
